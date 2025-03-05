@@ -36,8 +36,8 @@ public class AuthController {
   }
 
   @PostMapping("logout")
-  public void logout() {
-
+  public void logout(@RequestBody String token) {
+    usuarioService.logout(token);
   }
 
   @PostMapping("validate")

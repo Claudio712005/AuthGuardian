@@ -39,7 +39,7 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(authorize -> authorize
-                    .requestMatchers("/auth/v1/forgot-password", "/auth/v1/reset-password", "/auth/v1/login").permitAll()
+                    .requestMatchers("/auth/v1/forgot-password", "/auth/v1/reset-password", "/auth/v1/login", "/auth/v1/logout").permitAll()
                     .anyRequest().authenticated())
             .addFilterBefore(securityFilter, UsernamePasswordAuthenticationFilter.class).build();
   }

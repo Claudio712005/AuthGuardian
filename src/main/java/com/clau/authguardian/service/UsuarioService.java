@@ -21,10 +21,12 @@ public class UsuarioService implements UserDetailsService {
 
   private final JwtService jwtService;
   private final UsuarioRepository repository;
+  private final RedisService redisService;
 
-  public UsuarioService(JwtService jwtService, UsuarioRepository repository) {
+  public UsuarioService(JwtService jwtService, UsuarioRepository repository, RedisService redisService) {
     this.jwtService = jwtService;
     this.repository = repository;
+    this.redisService = redisService;
   }
 
   private final String SECRET_KEY = "chaveSecretaSuperSegura";
@@ -42,9 +44,14 @@ public class UsuarioService implements UserDetailsService {
   }
 
   public TokenResponseDTO refreshToken(RefreshTokenRequestDTO request) {
-    try {
-      String email = jwtService.validateRefreshToken(request.getRefreshToken());
+    String refreshToken = request.getRefreshToken();
 
+    if (redisService.isTokenBlacklisted(refreshToken)) {
+      throw new RuntimeException("Token invalidado, por favor faça login novamente.");
+    }
+
+    try {
+      String email = jwtService.validateRefreshToken(refreshToken);
       if (email.isEmpty()) {
         throw new JWTVerificationException("Token inválido ou expirado");
       }
@@ -60,8 +67,9 @@ public class UsuarioService implements UserDetailsService {
     }
   }
 
-  public void logout() {
 
+  public void logout(String token) {
+    redisService.addToBlacklist(token);
   }
 
   @Override
