@@ -7,9 +7,11 @@ import com.clau.authguardian.dto.response.TokenResponseDTO;
 import com.clau.authguardian.model.Usuario;
 import com.clau.authguardian.repository.UsuarioRepository;
 import io.micrometer.common.util.StringUtils;
+import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -29,6 +31,9 @@ public class UsuarioService implements UserDetailsService {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(UsuarioService.class);
 
+  private static final int MAX_ATTEMPTS = 5;
+  private static final int ATTEMPT_TIMEOUT = 10 * 60 * 1000;
+
   public UsuarioService(JwtService jwtService, UsuarioRepository repository, RedisService redisService, EmailService emailService) {
     this.jwtService = jwtService;
     this.repository = repository;
@@ -36,16 +41,41 @@ public class UsuarioService implements UserDetailsService {
     this.emailService = emailService;
   }
 
-  public TokenResponseDTO authenticate(AuthRequestDTO authRequestDTO, AuthenticationManager authenticationManager) {
-    Authentication authentication = authenticationManager.authenticate(
-            new UsernamePasswordAuthenticationToken(authRequestDTO.getEmail(), authRequestDTO.getSenha())
-    );
+  public TokenResponseDTO authenticate(AuthRequestDTO authRequestDTO, AuthenticationManager authenticationManager, HttpServletRequest request) {
+    String username = authRequestDTO.getEmail();
+    String ipAddress = getClientIp(request);
 
-    Usuario userDetails = (Usuario) authentication.getPrincipal();
-    String accessToken = jwtService.generateAccessToken(userDetails);
-    String refreshToken = jwtService.generateRefreshToken(userDetails);
+    String key = "login_attempts:" + ipAddress + ":" + username;
 
-    return new TokenResponseDTO(accessToken, refreshToken);
+    String attemptsString = redisService.getFromRedis(key);
+    int attempts = attemptsString != null ? Integer.parseInt(attemptsString) : 0;
+
+    if (attempts >= MAX_ATTEMPTS) {
+      long lastAttemptTime = Long.parseLong(redisService.getFromRedis(key + ":time"));
+      if (System.currentTimeMillis() - lastAttemptTime < ATTEMPT_TIMEOUT) {
+        throw new RuntimeException("Muitas tentativas de login. Tente novamente mais tarde.");
+      }
+    }
+
+    try {
+      Authentication authentication = authenticationManager.authenticate(
+              new UsernamePasswordAuthenticationToken(authRequestDTO.getEmail(), authRequestDTO.getSenha())
+      );
+
+      Usuario userDetails = (Usuario) authentication.getPrincipal();
+
+      redisService.removeFromRedis(key);
+
+      String accessToken = jwtService.generateAccessToken(userDetails);
+      String refreshToken = jwtService.generateRefreshToken(userDetails);
+
+      return new TokenResponseDTO(accessToken, refreshToken);
+    } catch (BadCredentialsException e) {
+      redisService.incrementInRedis(key);
+      redisService.setInRedis(key + ":time", String.valueOf(System.currentTimeMillis()));
+
+      throw new BadCredentialsException("Credenciais inválidas.");
+    }
   }
 
   public TokenResponseDTO refreshToken(RefreshTokenRequestDTO request) {
@@ -72,14 +102,13 @@ public class UsuarioService implements UserDetailsService {
     }
   }
 
-
   public void logout(String token) {
     try {
       String email = jwtService.validateToken(token);
 
       if (email != null && !email.isEmpty()) {
         redisService.addToBlacklist(token);
-      } else{
+      } else {
         LOGGER.error("Token já expirado ou inválido, não será adicionado na blacklist.");
       }
     } catch (JWTVerificationException e) {
@@ -102,7 +131,7 @@ public class UsuarioService implements UserDetailsService {
     }
   }
 
-  public void forgotPassword(String email){
+  public void forgotPassword(String email) {
     Usuario usuario = (Usuario) loadUserByUsername(email);
     String forgotPasswordToken = jwtService.generateForgotPasswordToken(usuario);
 
@@ -110,11 +139,11 @@ public class UsuarioService implements UserDetailsService {
   }
 
   public void resetPassword(String password, String retypedPassword, String token) {
-    if(!password.equals(retypedPassword)) {
+    if (!password.equals(retypedPassword)) {
       throw new RuntimeException("Senhas não conferem");
     }
 
-    if(redisService.isTokenBlacklisted(token)) {
+    if (redisService.isTokenBlacklisted(token)) {
       throw new RuntimeException("Token inválido ou expirado");
     }
 
@@ -132,6 +161,14 @@ public class UsuarioService implements UserDetailsService {
     repository.save(usuario);
 
     redisService.addToBlacklist(token);
+  }
+
+  private String getClientIp(HttpServletRequest request) {
+    String remoteAddr = request.getHeader("X-Forwarded-For");
+    if (remoteAddr == null || remoteAddr.isEmpty() || "unknown".equalsIgnoreCase(remoteAddr)) {
+      remoteAddr = request.getRemoteAddr();
+    }
+    return remoteAddr;
   }
 
   @Override

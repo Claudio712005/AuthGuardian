@@ -1,4 +1,4 @@
-package com.clau.authguardian.config.security;
+package com.clau.authguardian.config.filter;
 
 import com.clau.authguardian.repository.UsuarioRepository;
 import com.clau.authguardian.service.JwtService;

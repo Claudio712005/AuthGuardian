@@ -28,4 +28,21 @@ public class RedisService {
   public void removeFromBlacklist(String token) {
     redisTemplate.opsForSet().remove(BLACKLIST_KEY, token);
   }
+
+  public void incrementInRedis(String key) {
+    redisTemplate.opsForValue().increment(key, 1);
+    redisTemplate.expire(key, Duration.ofMinutes(5));
+  }
+
+  public void setInRedis(String key, String value) {
+    redisTemplate.opsForValue().set(key, value);
+  }
+
+  public String getFromRedis(String key) {
+    return redisTemplate.opsForValue().get(key);
+  }
+
+  public void removeFromRedis(String key) {
+    redisTemplate.delete(key);
+  }
 }

@@ -1,6 +1,6 @@
 package com.clau.authguardian.config.security;
 
-import org.springframework.beans.factory.annotation.Autowired;
+import com.clau.authguardian.config.filter.SecurityFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;

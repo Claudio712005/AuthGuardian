@@ -6,6 +6,7 @@ import com.clau.authguardian.dto.request.RefreshTokenRequestDTO;
 import com.clau.authguardian.dto.response.TokenResponseDTO;
 import com.clau.authguardian.service.JwtService;
 import com.clau.authguardian.service.UsuarioService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -28,8 +29,8 @@ public class AuthController {
   }
 
   @PostMapping("/login")
-  public ResponseEntity<TokenResponseDTO> login(@RequestBody AuthRequestDTO authRequestDTO) {
-    return ResponseEntity.ok().body(usuarioService.authenticate(authRequestDTO, authenticationManager));
+  public ResponseEntity<TokenResponseDTO> login(@RequestBody AuthRequestDTO authRequestDTO, HttpServletRequest request) {
+    return ResponseEntity.ok().body(usuarioService.authenticate(authRequestDTO, authenticationManager, request));
   }
 
   @PostMapping("/refresh-token")
