@@ -6,15 +6,18 @@ import com.clau.authguardian.dto.request.RefreshTokenRequestDTO;
 import com.clau.authguardian.dto.response.TokenResponseDTO;
 import com.clau.authguardian.model.Usuario;
 import com.clau.authguardian.repository.UsuarioRepository;
+import io.micrometer.common.util.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-
-import java.util.Optional;
 
 @Service
 public class UsuarioService implements UserDetailsService {
@@ -22,14 +25,16 @@ public class UsuarioService implements UserDetailsService {
   private final JwtService jwtService;
   private final UsuarioRepository repository;
   private final RedisService redisService;
+  private final EmailService emailService;
 
-  public UsuarioService(JwtService jwtService, UsuarioRepository repository, RedisService redisService) {
+  private static final Logger LOGGER = LoggerFactory.getLogger(UsuarioService.class);
+
+  public UsuarioService(JwtService jwtService, UsuarioRepository repository, RedisService redisService, EmailService emailService) {
     this.jwtService = jwtService;
     this.repository = repository;
     this.redisService = redisService;
+    this.emailService = emailService;
   }
-
-  private final String SECRET_KEY = "chaveSecretaSuperSegura";
 
   public TokenResponseDTO authenticate(AuthRequestDTO authRequestDTO, AuthenticationManager authenticationManager) {
     Authentication authentication = authenticationManager.authenticate(
@@ -69,6 +74,63 @@ public class UsuarioService implements UserDetailsService {
 
 
   public void logout(String token) {
+    try {
+      String email = jwtService.validateToken(token);
+
+      if (email != null && !email.isEmpty()) {
+        redisService.addToBlacklist(token);
+      } else{
+        LOGGER.error("Token já expirado ou inválido, não será adicionado na blacklist.");
+      }
+    } catch (JWTVerificationException e) {
+      LOGGER.error("Erro ao invalidar token", e);
+    }
+  }
+
+  public void validateToken(String token) {
+    try {
+      String subj = jwtService.validateToken(token);
+      if (StringUtils.isBlank(subj)) {
+        throw new JWTVerificationException("Token inválido");
+      }
+
+      if (redisService.isTokenBlacklisted(token)) {
+        throw new JWTVerificationException("Token inválido");
+      }
+    } catch (JWTVerificationException e) {
+      throw e;
+    }
+  }
+
+  public void forgotPassword(String email){
+    Usuario usuario = (Usuario) loadUserByUsername(email);
+    String forgotPasswordToken = jwtService.generateForgotPasswordToken(usuario);
+
+    emailService.sendForgotPasswordEmail(email, usuario.getNome(), forgotPasswordToken);
+  }
+
+  public void resetPassword(String password, String retypedPassword, String token) {
+    if(!password.equals(retypedPassword)) {
+      throw new RuntimeException("Senhas não conferem");
+    }
+
+    if(redisService.isTokenBlacklisted(token)) {
+      throw new RuntimeException("Token inválido ou expirado");
+    }
+
+    String email = jwtService.validateForgotPasswordToken(token);
+    if (email.isEmpty()) {
+      throw new JWTVerificationException("Token inválido ou expirado");
+    }
+
+    Usuario usuario = (Usuario) loadUserByUsername(email);
+
+    PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    String encodedPassword = passwordEncoder.encode(password);
+
+    usuario.setSenha(encodedPassword);
+    repository.save(usuario);
+
     redisService.addToBlacklist(token);
   }
 

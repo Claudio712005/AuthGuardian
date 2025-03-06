@@ -33,6 +33,10 @@ public class JwtService {
     return generateToken(usuario, refreshExpirationDays * 24, "refresh");
   }
 
+  public String generateForgotPasswordToken(Usuario usuario) {
+    return generateToken(usuario, 1, "forgot-password");
+  }
+
   private String generateToken(Usuario usuario, long expirationHours, String tokenType) {
     try {
       Algorithm algorithm = Algorithm.HMAC256(secret);
@@ -64,12 +68,50 @@ public class JwtService {
     }
   }
 
+  public String validateAccessToken(String token) {
+    try{
+      Algorithm algorithm = Algorithm.HMAC256(secret);
+      var decodedJWT = JWT.require(algorithm)
+              .withIssuer("auth-api")
+              .withClaim("tokenType", "access")
+              .build()
+              .verify(token);
+
+      if(!decodedJWT.getExpiresAt().toInstant().isAfter(Instant.now())) {
+        return "";
+      }
+
+      return decodedJWT.getSubject();
+    } catch (JWTVerificationException e) {
+      return "";
+    }
+  }
+
   public String validateRefreshToken(String token) {
     try {
       Algorithm algorithm = Algorithm.HMAC256(secret);
       var decodedJWT = JWT.require(algorithm)
               .withIssuer("auth-api")
               .withClaim("tokenType", "refresh")
+              .build()
+              .verify(token);
+
+      if(!decodedJWT.getExpiresAt().toInstant().isAfter(Instant.now())) {
+        return "";
+      }
+
+      return decodedJWT.getSubject();
+    } catch (JWTVerificationException e) {
+      return "";
+    }
+  }
+
+  public String validateForgotPasswordToken(String token) {
+    try {
+      Algorithm algorithm = Algorithm.HMAC256(secret);
+      var decodedJWT = JWT.require(algorithm)
+              .withIssuer("auth-api")
+              .withClaim("tokenType", "forgot-password")
               .build()
               .verify(token);
 

@@ -11,7 +11,7 @@ VALUES (1, 'ROLE_ADMIN', 'Administrador'),
        (4, 'ROLE_SUPORTE', 'Equipe de suporte');
 
 INSERT INTO usuario (id, nome, email, senha)
-VALUES (1, 'Cláudio', 'claudio@gmail.com', '$2b$12$4FM3A0un93R72ieiEddIE.J9hWbrO64j93W4cJZy0jyQcQo2WMFBC'),
+VALUES (1, 'Cláudio', 'clausilvaaraujo11@gmail.com', '$2b$12$4FM3A0un93R72ieiEddIE.J9hWbrO64j93W4cJZy0jyQcQo2WMFBC'),
        (2, 'Mariana', 'mariana@gmail.com', '$2b$12$4FM3A0un93R72ieiEddIE.J9hWbrO64j93W4cJZy0jyQcQo2WMFBC'),
        (3, 'Rafael', 'rafael@gmail.com', '$2b$12$4FM3A0un93R72ieiEddIE.J9hWbrO64j93W4cJZy0jyQcQo2WMFBC'),
        (4, 'Carla', 'carla@gmail.com', '$2b$12$4FM3A0un93R72ieiEddIE.J9hWbrO64j93W4cJZy0jyQcQo2WMFBC');
